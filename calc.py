@@ -1,6 +1,7 @@
 import csv
 import os
-from collections import Counter, defaultdict
+import sys
+from collections import defaultdict
 
 DEFAULT_PATH = "data/sales.csv"
 OUTPUT_PATH = os.path.join("output", "daily_by_sku.csv")
@@ -103,14 +104,22 @@ def print_control_totals(rows, unknown, duplicates, errors, valid, result):
     print("Баланс (прочитано = учтено + дубли + неизвестные + ошибки):",
           len(rows) == accounted)
     print("Сумма orders = уникальных заказов:", total_orders == len(valid))
-    print("Исходный статус -> итоговый:")
-    counts = Counter((r["status_raw"], r["status_norm"]) for r in rows)
-    for (raw, norm), n in sorted(counts.items(), key=lambda x: (x[0][1], x[0][0])):
-        print("  %r -> %s: %d" % (raw, norm, n))
+    print("Статусы после нормализации (строк):")
+    for norm in ("delivered", "cancelled", "unknown"):
+        total = sum(1 for r in rows if r["status_norm"] == norm)
+        odd = sum(1 for r in rows if r["status_norm"] == norm and r["status_raw"] != norm)
+        print("  %s: %d (нестандартное написание: %d)" % (norm, total, odd))
 
 
 def main():
-    rows = read_rows(DEFAULT_PATH)
+    path = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_PATH
+    if not os.path.isfile(path):
+        print("ОШИБКА: входной файл не найден: %s" % path)
+        sys.exit(1)
+    os.makedirs("output", exist_ok=True)
+    os.makedirs("errors", exist_ok=True)
+
+    rows = read_rows(path)
     known, unknown = split_unknown(rows)
     if unknown:
         print("ПРЕДУПРЕЖДЕНИЕ: неизвестных статусов: %d" % len(unknown))
@@ -121,7 +130,6 @@ def main():
     result = aggregate(valid)
     write_result(result)
     print_control_totals(rows, unknown, duplicates, errors, valid, result)
-
 
 if __name__ == "__main__":
     main()
